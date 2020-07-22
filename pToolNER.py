@@ -76,9 +76,10 @@ class PortugueseToolNER:
 						token = token.strip()
 						tag = line.split(sepTokenTag)[-1]
 						tag = tag.strip()
-						tokensInSentence.append(token)
-						tagsInSentence.append(tag)
-						tokenAndTagInSentence.append(token+sepTokenTag+tag)
+						if len(token) != 0 and len(tag) != 0:
+							tokensInSentence.append(token)
+							tagsInSentence.append(tag)
+							tokenAndTagInSentence.append(token+sepTokenTag+tag)
 					self.sentencesTokens.append(tokensInSentence)
 					self.sentencesLabels.append(tagsInSentence)
 					self.sentencesTokenAndLabels.append(tokenAndTagInSentence)
