@@ -6,7 +6,7 @@ Exemplo de comofazer a rotulção de todos os arquivos .txt em uma pasta.
 ```python
 pToolNER = PortugueseToolNER()
 
-pToolNER.sequenceTaggingOnText(nerTrainedModelPath='/home/joaquim/Área de Trabalho/best-model.pt',
+pToolNER.sequenceTaggingOnText(nerTrainedModelPath='best-model.pt',
                  rootFolderPath='./',
                  fileExtension='.txt',
                  maskNamedEntity=False,
