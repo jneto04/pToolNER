@@ -62,4 +62,4 @@ pToolNER.sequenceTaggingOnText(
                outputFormat='plain',
                createOutputListSpans=True
                )
-	```
+```
