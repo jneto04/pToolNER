@@ -49,7 +49,7 @@ Aqui as EN PESSOA e LOCAL serão substituídas por um único simbolo '[HIDDEN-IN
 pToolNER = PortugueseToolNER()
 
 pToolNER.sequenceTaggingOnText(
-               nerTrainedModelPath='/content/drive/My Drive/NER-Models/Final/ourFlair+W2V-SKPG-NILC/best-model.pt',
+               nerTrainedModelPath='best-model.pt',
                rootFolderPath='./PredictablesFiles',
                fileExtension='.txt',
                useTokenizer=True,
