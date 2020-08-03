@@ -14,6 +14,10 @@ class PortugueseToolNER:
 		self.sentencesTokens 		 : list[str] = []
 		self.sentencesLabels 		 : list[str] = []
 		self.sentencesTokenAndLabels : list[str] = []
+		self.filteredSentencesLabels : list[str] = []
+		self.unMaskedPlainSentences	 : list[str] = []
+		self.taggedPlainTextTokenAndLabels	 : list[str] = []
+		self.filteredSentencesTokenAndLabels : list[str] = []
 
 	def __getListLabels(self):
 		self.uniqueLabels : list = []
@@ -24,35 +28,38 @@ class PortugueseToolNER:
 
 		return self.uniqueLabels
 
-	def __clearRepeatedMask(self, tokens):
-		newList = []
-		finded = False
-		for i in range(len(tokens)):
-			if tokens[i] != self.specialTokenToMaskNE:
-				newList.append(tokens[i])
-			else:
-				if i == 0:
-					newList.append(self.specialTokenToMaskNE)
-				if newList[-1] != self.specialTokenToMaskNE:
-					newList.append(self.specialTokenToMaskNE)
+	def __getMaskTokensIndex(self, spans, entitiesToMask):
+		toMaskIDX = []
+		for en in spans:
+			for token in en.tokens:
+				if token.get_tag('label').value in entitiesToMask:
+					toMaskIDX.append(token.idx)
+		return toMaskIDX
 
-		return newList
+	def __getSpans(self, spans):
+		uniqueLabels = []
+		eNsAndAmount, uniqueNGrams = [], []
+		fullNGrams, nGramsCount = [], []
 
-	def __maskNamedEntityOnSentence(self, taggedSentence):
-		self.sentenceWithMaskedNE = []
-		tokens = taggedSentence.strip().split(' ')
-		for i in range(len(tokens)):
-			if i+1 < len(tokens):
-				if tokens[i+1] not in self.acceptableLabels:
-					if tokens[i] not in self.acceptableLabels:
-						self.sentenceWithMaskedNE.append(tokens[i])
-				if tokens[i+1] in self.acceptableLabels:
-						self.sentenceWithMaskedNE.append(self.specialTokenToMaskNE)
-			elif tokens[i] not in self.acceptableLabels:
-				self.sentenceWithMaskedNE.append(tokens[i])
-		self.sentenceWithMaskedNE = self.__clearRepeatedMask(self.sentenceWithMaskedNE)
+		eNs  = [span[0] for span in spans]
 
-		return self.sentenceWithMaskedNE
+		for eN in zip(eNs, spans):
+			l = len(eN[0].split(' '))
+			fullNGrams.append(l)
+			tag = eN[1][1]
+			if tag not in uniqueLabels:
+				uniqueLabels.append(tag)
+			if l not in uniqueNGrams:
+				uniqueNGrams.append(l)
+			if (eN[0], str(eNs.count(eN[0])), tag) not in eNsAndAmount:
+				eNsAndAmount.append((eN[0], str(eNs.count(eN[0])), tag))
+
+		uniqueNGrams.sort()
+
+		for ng in uniqueNGrams:
+			nGramsCount.append(str(ng)+'-gram: '+str(fullNGrams.count(ng)))
+
+		return eNsAndAmount, nGramsCount, uniqueLabels
 
 	def loadCorpusInCoNLLFormat(self,
 								inputFilePath,
@@ -170,61 +177,147 @@ class PortugueseToolNER:
 							  nerTrainedModelPath,
 							  rootFolderPath,
 							  fileExtension : str = '.txt',
-							  maskNamedEntity : bool = True,
+							  useTokenizer : bool = False,
+							  maskNamedEntity : bool = False,
+							  createOutputListSpans : bool = False,
 							  createOutputFile : bool = False,
 							  **kwargs):
 
-		self.allPlainLabels = []
+		self.maskedSentencesToken = []
+		self.maskedSentencesTokenAndLabel = []
+		self.taggedFilesDict = {}
+		self.namedEntitiesDict = {}
+		self.namedEntitiesByFileDict = {}
+
+		allNamedEntitiesInFile = []
+		generalNamedEntities = []
+		maskedTokenAndLabel = []
+		maskedToken = []
+
 		files = [f for f in os.listdir(rootFolderPath) if f.find(fileExtension) != -1]
 		tagger = SequenceTagger.load(nerTrainedModelPath)
 		
 		for file in files:
 			sentencesToPredict = self.loadCorpusInPlainFormat(rootFolderPath+'/'+file)
-			self.taggedSentences = []
+			_auxTaggedPlainSentence = []
 			for sentence in sentencesToPredict:
 				sentence = sentence.strip()
-				sentenceToPred = Sentence(sentence)
+				sentenceToPred = Sentence(sentence, use_tokenizer=useTokenizer)
 				tagger.predict(sentenceToPred)
-				taggedSentence = sentenceToPred.to_tagged_string()
-				
-				for i in sentenceToPred.get_spans('label'):
-					bTag = '<B-'+i.tag+'>'
-					iTag = '<I-'+i.tag+'>'
-					if bTag not in self.allPlainLabels:
-						self.allPlainLabels.append(bTag)
-					if iTag not in self.allPlainLabels:
-						self.allPlainLabels.append(iTag)
+
+				sentenceSpans = sentenceToPred.get_spans(label_type='label')
 
 				if maskNamedEntity == True:
-					self.acceptableLabels = kwargs.get('acceptableLabels')
-					self.specialTokenToMaskNE = kwargs.get('specialTokenToMaskNE')
-					maskedSentence = self.__maskNamedEntityOnSentence(taggedSentence)
-					self.taggedSentences.append(maskedSentence)
+					try:
+						sepTokenTag = kwargs.get('sepTokenTag')
+						entitiesToMask = kwargs.get('entitiesToMask')
+						specialTokenToMaskNE = kwargs.get('specialTokenToMaskNE')
+					except:
+						raise Exception('You need set up these paramters: \
+							"sepTokenTag", "entitiesToMask" and "specialTokenToMaskNE"')
+					
+					_toMaskIDX = self.__getMaskTokensIndex(sentenceSpans, entitiesToMask)
+
+					for token in sentenceToPred.tokens:
+						if token.idx in _toMaskIDX:
+							if len(maskedTokenAndLabel) > 0:
+								if maskedToken[-1] != specialTokenToMaskNE:
+									maskedToken.append(specialTokenToMaskNE)
+									maskedTokenAndLabel.append(specialTokenToMaskNE+sepTokenTag+token.get_tag('label').value)
+							else:
+								maskedToken.append(specialTokenToMaskNE)
+								maskedTokenAndLabel.append(specialTokenToMaskNE+sepTokenTag+token.get_tag('label').value)
+						else:
+							maskedToken.append(token.text)
+							maskedTokenAndLabel.append(token.text+sepTokenTag+token.get_tag('label').value)
+					self.maskedSentencesToken.append(maskedToken)
+					self.maskedSentencesTokenAndLabel.append(maskedTokenAndLabel)
+					self.maskedPlainSentencesToken = [' '.join(s) for s in self.maskedSentencesToken] #Add tagged sentences
+					_toMaskIDX, maskedToken, maskedTokenAndLabel = [], [], []
 				else:
-					self.taggedSentences.append(taggedSentence)
-				
-			if maskNamedEntity == True:
-				newTaggedSentences = []
-				newSentence = []
-				for sentence in self.taggedSentences:
-					for token in sentence:
-						if (token.find('<B-') == -1 or token.find('<I-') == -1) and token.find('>') == -1:
-							newSentence.append(token)
-					newTaggedSentences.append(' '.join(newSentence))
-					newSentence = []
-				self.taggedSentences : list[str] = []
-				self.taggedSentences = newTaggedSentences
+					self.unMaskedPlainSentences.append(sentenceToPred.to_tagged_string())
+
+				if createOutputListSpans == True:
+					for span in sentenceSpans:
+						allNamedEntitiesInFile.append((span.text,span.tag))
+						generalNamedEntities.append((span.text,span.tag))
 
 			if createOutputFile == True:
-				outputFilePath = kwargs.get('outputFilePath')
-				self.generateOutputFile(outputFileName = outputFilePath+'/ptTagged-'+str(file),
-										sentences = self.taggedSentences,
-										outputFormat = kwargs.get('outputFormat'))
+				try:
+					outputFilePath = kwargs.get('outputFilePath')
+					outFormat = kwargs.get('outputFormat')
+				except:
+					raise Exception('You need set up these paramters: "outputFilePath" and "outputFormat"')
 
-			self.taggedPlainTexts.append(self.taggedSentences)
+				if outFormat == 'plain':
+					if maskNamedEntity == True:
+						self.generateOutputFile(outputFileName = outputFilePath+'/ptTagged-'+str(file),
+												sentences = [' '.join(s) for s in self.maskedSentencesToken],
+												outputFormat = outFormat)
+					else:
+						self.generateOutputFile(outputFileName = outputFilePath+'/ptTagged-'+str(file),
+												sentences = self.unMaskedPlainSentences,
+												outputFormat = outFormat)
+				
+				if outFormat == 'CoNLL':
+					if maskNamedEntity == True:
+						self.generateOutputFile(outputFileName = outputFilePath+'/ptTagged-'+str(file),
+												sentences = self.maskedSentencesToken,
+												outputFormat = outFormat)
+					else:
+						raise Exception('Por implementar...')
 
-		return self.taggedPlainTexts
+			if maskNamedEntity == True:
+				self.taggedFilesDict[str(file)] = self.maskedPlainSentencesToken
+			else:
+				self.taggedFilesDict[str(file)] = self.unMaskedPlainSentences
 
+			if createOutputListSpans == True:
+				fileSpansToOut = []
+				nEsAndAmount, nGramsCountByFile, uniqueLabelsByFile = self.__getSpans(allNamedEntitiesInFile)
+				self.namedEntitiesByFileDict[str(file)] = nEsAndAmount
+
+				for uL in uniqueLabelsByFile:
+					fileSpansToOut.append('CATEGORY:'+str(uL)+'\n')
+					for t in nEsAndAmount:
+						if t[2] == uL:
+							fileSpansToOut.append(': '.join(t[0:2]))
+					fileSpansToOut.append('\n')
+
+				fileSpansToOut.append('\n-------\n')
+
+				for nGCG in nGramsCountByFile:
+					fileSpansToOut.append(nGCG)
+
+				self.generateOutputFile(outputFileName = outputFilePath+'/NamedEntities-'+str(file),
+											sentences = fileSpansToOut,
+											outputFormat = 'plain')
+
+			self.maskedSentencesToken, self.maskedPlainSentencesToken = [], []
+			self.unMaskedPlainSentences, allNamedEntitiesInFile = [], []
+		
+		if createOutputListSpans == True:
+			generalSpansToOut = []
+			generalNEsAndAmount, nGramsCountGeneral, uniqueLabels = self.__getSpans(generalNamedEntities)
+			self.namedEntitiesDict['allFiles'] = generalNEsAndAmount
+
+			for uL in uniqueLabels:
+				generalSpansToOut.append('CATEGORY:'+str(uL)+'\n')
+				for t in generalNEsAndAmount:
+					if t[2] == uL:
+						generalSpansToOut.append(': '.join(t[0:2]))
+				generalSpansToOut.append('\n')
+
+			generalSpansToOut.append('\n-------\n')
+
+			for nGCG in nGramsCountGeneral:
+				generalSpansToOut.append(nGCG)
+
+			self.generateOutputFile(outputFileName = outputFilePath+'/GeneralNamedEntities.txt',
+											sentences = generalSpansToOut,
+											outputFormat = 'plain')
+
+		return self.taggedFilesDict, self.namedEntitiesByFileDict, self.namedEntitiesDict
 
 	def generateOutputFile(self,
 						   outputFileName,
