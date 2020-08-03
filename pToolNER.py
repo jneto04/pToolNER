@@ -2,6 +2,7 @@ import re
 import os
 from flair.data import Sentence
 from flair.models import SequenceTagger
+from unidecode import unidecode
 
 class PortugueseToolNER:
 
@@ -16,6 +17,7 @@ class PortugueseToolNER:
 		self.sentencesTokenAndLabels : list[str] = []
 		self.filteredSentencesLabels : list[str] = []
 		self.unMaskedPlainSentences	 : list[str] = []
+		self.uniqueStringNames		 : list[str] = []
 		self.taggedPlainTextTokenAndLabels	 : list[str] = []
 		self.filteredSentencesTokenAndLabels : list[str] = []
 
@@ -60,6 +62,39 @@ class PortugueseToolNER:
 			nGramsCount.append(str(ng)+'-gram: '+str(fullNGrams.count(ng)))
 
 		return eNsAndAmount, nGramsCount, uniqueLabels
+
+	def __getPossiblesTokens(self, token):
+		tokenUniCode = unidecode(token)
+		return [token, token.lower(), token.upper(), token.capitalize(), tokenUniCode, \
+				tokenUniCode.lower(), tokenUniCode.upper(), tokenUniCode.capitalize()]
+
+	def getUniqueNames(self, rawListNames, listStopNames):
+		exhaustiveListStopNames = []
+
+		for sN in listStopNames:
+			pSNs = self.__getPossiblesTokens(sN)
+			for pSN in pSNs:
+				if pSN not in exhaustiveListStopNames:
+					exhaustiveListStopNames.append(pSN)
+
+		for rawName in rawListNames:
+			tokens = rawName.split(' ')
+			for token in tokens:
+				if token not in exhaustiveListStopNames:
+					if token not in self.uniqueStringNames:
+						self.uniqueStringNames.append(token)
+					if token.lower() not in self.uniqueStringNames:
+						self.uniqueStringNames.append(token.lower())
+					if token.upper() not in self.uniqueStringNames:
+						self.uniqueStringNames.append(token.upper())
+
+					tokenUniCode = unidecode(token)
+					if tokenUniCode not in self.uniqueStringNames:
+						self.uniqueStringNames.append(tokenUniCode)
+					if tokenUniCode.lower() not in self.uniqueStringNames:
+						self.uniqueStringNames.append(tokenUniCode.lower())
+					if tokenUniCode.upper() not in self.uniqueStringNames:
+						self.uniqueStringNames.append(tokenUniCode.upper())
 
 	def loadCorpusInCoNLLFormat(self,
 								inputFilePath,
@@ -217,6 +252,16 @@ class PortugueseToolNER:
 							"sepTokenTag", "entitiesToMask" and "specialTokenToMaskNE"')
 					
 					_toMaskIDX = self.__getMaskTokensIndex(sentenceSpans, entitiesToMask)
+
+					if kwargs.get('useAuxListNE') == True:
+						auxListNE = kwargs.get('auxListNE')
+						for token in sentenceToPred.tokens:
+							pTokens = self.__getPossiblesTokens(token.text)
+							for pT in pTokens:
+								if pT in auxListNE:
+									if token.idx not in _toMaskIDX:
+										_toMaskIDX.append(token.idx)
+						_toMaskIDX.sort()
 
 					for token in sentenceToPred.tokens:
 						if token.idx in _toMaskIDX:
