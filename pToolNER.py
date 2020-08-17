@@ -1,6 +1,7 @@
 import re
 import os
 import nltk
+import flair
 from flair.data import Sentence
 from flair.models import SequenceTagger
 from unidecode import unidecode
