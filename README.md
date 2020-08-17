@@ -90,3 +90,30 @@ pToolNER.sequenceTaggingOnText(
                createOutputListSpans=True
                )
 ```
+## Como fazer rotulação de sequencia de sentenças _(On the fly)_ sem carregar arquivos de texto.
+```python
+pToolNER = PortugueseToolNER()
+
+	listStopNames = ['da', 'de', 'do', 'dos']
+	listNames = ['name name name', 'name', 'name name']
+
+	pToolNER.getUniqueNames(listNames, listStopNames)
+
+	pToolNER.sequenceTaggingOnTheFly(
+				   nerTrainedModelPath='best-model.pt',
+				   textToPredict = 'Your Sequence Sentence Here. New sentence.',
+				   textId = 1,
+				   useTokenizer=True,
+				   useSentenceTokenize=True,
+				   maskNamedEntity=True,
+				   specialTokenToMaskNE='[HIDDEN-INFO]',
+				   sepTokenTag=' ',
+				   entitiesToMask=['B-PER', 'I-PER', 'B-LOC', 'I-LOC'],
+				   useAuxListNE=True,
+				   auxListNE=pToolNER.uniqueStringNames,
+				   createOutputFile=True,
+				   outputFilePath='./TaggedTexts',
+				   outputFormat='plain',
+				   createOutputListSpans=True
+				   )
+```
