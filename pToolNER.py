@@ -1,5 +1,6 @@
 import re
 import os
+import nltk
 from flair.data import Sentence
 from flair.models import SequenceTagger
 from unidecode import unidecode
@@ -67,6 +68,10 @@ class PortugueseToolNER:
 		tokenUniCode = unidecode(token)
 		return [token, token.lower(), token.upper(), token.capitalize(), tokenUniCode, \
 				tokenUniCode.lower(), tokenUniCode.upper(), tokenUniCode.capitalize()]
+
+	def __sentenceTokenizer(self, text):
+		sentDetector = nltk.data.load('tokenizers/punkt/portuguese.pickle')
+		return sentDetector.tokenize(text)
 
 	def getUniqueNames(self, rawListNames, listStopNames):
 		exhaustiveListStopNames = []
@@ -363,6 +368,161 @@ class PortugueseToolNER:
 											outputFormat = 'plain')
 
 		return self.taggedFilesDict, self.namedEntitiesByFileDict, self.namedEntitiesDict
+
+	def sequenceTaggingOnTheFly(self,
+							  textToPredict : str,
+							  nerTrainedModelPath : str,
+							  textId : int,
+							  useSentenceTokenize : bool = True,
+							  useTokenizer : bool = False,
+							  maskNamedEntity : bool = False,
+							  createOutputListSpans : bool = False,
+							  createOutputFile : bool = False,
+							  **kwargs):
+
+		self.maskedSentencesToken = []
+		self.maskedSentencesTokenAndLabel = []
+		self.taggedFilesDict = {}
+		self.namedEntitiesDict = {}
+		self.namedEntitiesByFileDict = {}
+
+		allNamedEntitiesInFile = []
+		generalNamedEntities = []
+		maskedTokenAndLabel = []
+		maskedToken = []
+		
+		if useSentenceTokenize == True:
+			sentencesToPredict = self.__sentenceTokenizer(textToPredict)
+		else:
+			sentencesToPredict = [textToPredict]
+
+		tagger = SequenceTagger.load(nerTrainedModelPath)
+		
+		for sentence in sentencesToPredict:
+			sentence = sentence.strip()
+			sentenceToPred = Sentence(sentence, use_tokenizer=useTokenizer)
+			tagger.predict(sentenceToPred)
+
+			sentenceSpans = sentenceToPred.get_spans(label_type='label')
+
+			if maskNamedEntity == True:
+				try:
+					sepTokenTag = kwargs.get('sepTokenTag')
+					entitiesToMask = kwargs.get('entitiesToMask')
+					specialTokenToMaskNE = kwargs.get('specialTokenToMaskNE')
+				except:
+					raise Exception('You need set up these paramters: \
+						"sepTokenTag", "entitiesToMask" and "specialTokenToMaskNE"')
+				
+				_toMaskIDX = self.__getMaskTokensIndex(sentenceSpans, entitiesToMask)
+
+				if kwargs.get('useAuxListNE') == True:
+					auxListNE = kwargs.get('auxListNE')
+					for token in sentenceToPred.tokens:
+						pTokens = self.__getPossiblesTokens(token.text)
+						for pT in pTokens:
+							if pT in auxListNE:
+								if token.idx not in _toMaskIDX:
+									_toMaskIDX.append(token.idx)
+					_toMaskIDX.sort()
+
+				for token in sentenceToPred.tokens:
+					if token.idx in _toMaskIDX:
+						if len(maskedTokenAndLabel) > 0:
+							if maskedToken[-1] != specialTokenToMaskNE:
+								maskedToken.append(specialTokenToMaskNE)
+								maskedTokenAndLabel.append(specialTokenToMaskNE+sepTokenTag+token.get_tag('label').value)
+						else:
+							maskedToken.append(specialTokenToMaskNE)
+							maskedTokenAndLabel.append(specialTokenToMaskNE+sepTokenTag+token.get_tag('label').value)
+					else:
+						maskedToken.append(token.text)
+						maskedTokenAndLabel.append(token.text+sepTokenTag+token.get_tag('label').value)
+				self.maskedSentencesToken.append(maskedToken)
+				self.maskedSentencesTokenAndLabel.append(maskedTokenAndLabel)
+				self.maskedPlainSentencesToken = [' '.join(s) for s in self.maskedSentencesToken] #Add tagged sentences
+				_toMaskIDX, maskedToken, maskedTokenAndLabel = [], [], []
+			else:
+				self.unMaskedPlainSentences.append(sentenceToPred.to_tagged_string())
+
+			if createOutputListSpans == True:
+				for span in sentenceSpans:
+					allNamedEntitiesInFile.append((span.text,span.tag))
+					generalNamedEntities.append((span.text,span.tag))
+
+		if createOutputFile == True:
+			try:
+				outputFilePath = kwargs.get('outputFilePath')
+				outFormat = kwargs.get('outputFormat')
+			except:
+				raise Exception('You need set up these paramters: "outputFilePath" and "outputFormat"')
+
+			if outFormat == 'plain':
+				if maskNamedEntity == True:
+					self.generateOutputFile(outputFileName = outputFilePath+'/ptTagged-'+str(textId)+'.txt',
+											sentences = [' '.join(s) for s in self.maskedSentencesToken],
+											outputFormat = outFormat)
+				else:
+					self.generateOutputFile(outputFileName = outputFilePath+'/ptTagged-'+str(textId)+'.txt',
+											sentences = self.unMaskedPlainSentences,
+											outputFormat = outFormat)
+			
+			if outFormat == 'CoNLL':
+				if maskNamedEntity == True:
+					self.generateOutputFile(outputFileName = outputFilePath+'/ptTagged-'+str(textId)+'.txt',
+											sentences = self.maskedSentencesToken,
+											outputFormat = outFormat)
+				else:
+					raise Exception('Por implementar...')
+
+		if maskNamedEntity == True:
+			self.taggedFilesDict[str(textId)] = self.maskedPlainSentencesToken
+		else:
+			self.taggedFilesDict[str(textId)] = self.unMaskedPlainSentences
+
+		if createOutputListSpans == True:
+			fileSpansToOut = []
+			nEsAndAmount, nGramsCountByFile, uniqueLabelsByFile = self.__getSpans(allNamedEntitiesInFile)
+			self.namedEntitiesByFileDict[str(textId)] = nEsAndAmount
+
+			for uL in uniqueLabelsByFile:
+				fileSpansToOut.append('CATEGORY:'+str(uL)+'\n')
+				for t in nEsAndAmount:
+					if t[2] == uL:
+						fileSpansToOut.append(': '.join(t[0:2]))
+				fileSpansToOut.append('\n')
+
+			fileSpansToOut.append('\n-------\n')
+
+			for nGCG in nGramsCountByFile:
+				fileSpansToOut.append(nGCG)
+
+			self.generateOutputFile(outputFileName = outputFilePath+'/NamedEntities-'+str(textId)+'.txt',
+									sentences = fileSpansToOut,
+									outputFormat = 'plain')
+	
+		if createOutputListSpans == True:
+			generalSpansToOut = []
+			generalNEsAndAmount, nGramsCountGeneral, uniqueLabels = self.__getSpans(generalNamedEntities)
+			self.namedEntitiesDict['allFiles'] = generalNEsAndAmount
+
+			for uL in uniqueLabels:
+				generalSpansToOut.append('CATEGORY:'+str(uL)+'\n')
+				for t in generalNEsAndAmount:
+					if t[2] == uL:
+						generalSpansToOut.append(': '.join(t[0:2]))
+				generalSpansToOut.append('\n')
+
+			generalSpansToOut.append('\n-------\n')
+
+			for nGCG in nGramsCountGeneral:
+				generalSpansToOut.append(nGCG)
+
+			self.generateOutputFile(outputFileName = outputFilePath+'/GeneralNamedEntities.txt',
+									sentences = generalSpansToOut,
+									outputFormat = 'plain')
+		
+		return textId, self.maskedSentencesToken, self.taggedFilesDict, self.namedEntitiesByFileDict, self.namedEntitiesDict
 
 	def generateOutputFile(self,
 						   outputFileName,
