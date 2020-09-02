@@ -151,6 +151,9 @@ class PortugueseToolNER:
 		except:
 			raise Exception('"'+inputFilePath+'" is not a valid file name.')
 
+	def loadNamedEntityModel(self, nerTrainedModelPath : str):
+		self.tagger = SequenceTagger.load(nerTrainedModelPath)
+
 	def filterCoNLLCorpusByCategories(self,
 									  acceptableLabels,
 									  maskForUnacceptLabel,
@@ -215,7 +218,6 @@ class PortugueseToolNER:
 		return filteredPlainSentence
 
 	def sequenceTaggingOnText(self,
-							  nerTrainedModelPath,
 							  rootFolderPath,
 							  fileExtension : str = '.txt',
 							  useTokenizer : bool = False,
@@ -236,7 +238,7 @@ class PortugueseToolNER:
 		maskedToken = []
 
 		files = [f for f in os.listdir(rootFolderPath) if f.find(fileExtension) != -1]
-		tagger = SequenceTagger.load(nerTrainedModelPath)
+		#self.tagger = SequenceTagger.load(nerTrainedModelPath)
 		
 		for file in files:
 			sentencesToPredict = self.loadCorpusInPlainFormat(rootFolderPath+'/'+file)
@@ -244,7 +246,7 @@ class PortugueseToolNER:
 			for sentence in sentencesToPredict:
 				sentence = sentence.strip()
 				sentenceToPred = Sentence(sentence, use_tokenizer=useTokenizer)
-				tagger.predict(sentenceToPred)
+				self.tagger.predict(sentenceToPred)
 
 				sentenceSpans = sentenceToPred.get_spans(label_type='label')
 
@@ -372,7 +374,6 @@ class PortugueseToolNER:
 
 	def sequenceTaggingOnTheFly(self,
 							  textToPredict : str,
-							  nerTrainedModelPath : str,
 							  textId : int,
 							  useSentenceTokenize : bool = True,
 							  useTokenizer : bool = False,
@@ -396,13 +397,11 @@ class PortugueseToolNER:
 			sentencesToPredict = self.__sentenceTokenizer(textToPredict)
 		else:
 			sentencesToPredict = [textToPredict]
-
-		tagger = SequenceTagger.load(nerTrainedModelPath)
 		
 		for sentence in sentencesToPredict:
 			sentence = sentence.strip()
 			sentenceToPred = Sentence(sentence, use_tokenizer=useTokenizer)
-			tagger.predict(sentenceToPred)
+			self.tagger.predict(sentenceToPred)
 
 			sentenceSpans = sentenceToPred.get_spans(label_type='label')
 
