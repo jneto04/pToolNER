@@ -30,8 +30,9 @@ pToolNER.generateOutputFile(
 ```python
 pToolNER = PortugueseToolNER()
 
+pToolNER.loadNamedEntityModel('best-model.pt')
+
 pToolNER.sequenceTaggingOnText(
-               nerTrainedModelPath='best-model.pt',
                rootFolderPath='./PredictablesFiles',
                fileExtension='.txt',
                useTokenizer=True,
@@ -48,8 +49,9 @@ Aqui as EN PESSOA e LOCAL serão substituídas por um único simbolo '[HIDDEN-IN
 ```python
 pToolNER = PortugueseToolNER()
 
+pToolNER.loadNamedEntityModel('best-model.pt')
+
 pToolNER.sequenceTaggingOnText(
-               nerTrainedModelPath='best-model.pt',
                rootFolderPath='./PredictablesFiles',
                fileExtension='.txt',
                useTokenizer=True,
@@ -73,8 +75,9 @@ listNames = ['name name name', 'name', 'name name']
 
 pToolNER.getUniqueNames(listNames, listStopNames)
 
+pToolNER.loadNamedEntityModel('best-model.pt')
+
 pToolNER.sequenceTaggingOnText(
-               nerTrainedModelPath='best-model.pt',
                rootFolderPath='./PredictablesFiles',
                fileExtension='.txt',
                useTokenizer=True,
@@ -99,9 +102,10 @@ listNames = ['name name name', 'name', 'name name']
 
 pToolNER.getUniqueNames(listNames, listStopNames)
 
+pToolNER.loadNamedEntityModel('best-model.pt')
+
 pToolNER.sequenceTaggingOnTheFly(
-			   nerTrainedModelPath='best-model.pt',
-			   textToPredict = 'Your Sequence Sentence Here. New sentence.',
+			   textToPredict = 'Put Your Sentence Here.',
 			   textId = 1,
 			   useTokenizer=True,
 			   useSentenceTokenize=True,
@@ -116,4 +120,24 @@ pToolNER.sequenceTaggingOnTheFly(
 			   outputFormat='plain',
 			   createOutputListSpans=True
 			   )
+```
+## Anonimização de Entidades Nomeadas
+Como fazer rotulação de sequencia de sentenças _(On the fly)_ sem carregar arquivos de texto e lista auxiliar.
+```python
+pToolNER = PortugueseToolNER()
+
+pToolNER.loadNamedEntityModel('best-model.pt')
+
+pToolNER.sequenceTaggingOnTheFly(
+          textToPredict = 'Put Your Sentence Here.',
+          textId = 1,
+          useTokenizer=True,
+          useSentenceTokenize=True,
+          maskNamedEntity=True,
+          specialTokenToMaskNE='[HIDDEN-INFO]',
+          sepTokenTag=' ',
+          entitiesToMask=['B-PER', 'I-PER', 'B-LOC', 'I-LOC'],
+          useAuxListNE=False,
+          createOutputFile=False,
+          )
 ```
