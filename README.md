@@ -139,5 +139,6 @@ pToolNER.sequenceTaggingOnTheFly(
           entitiesToMask=['B-PER', 'I-PER', 'B-LOC', 'I-LOC'],
           useAuxListNE=False,
           createOutputFile=False,
+	  createOutputListSpans=False
           )
 ```
