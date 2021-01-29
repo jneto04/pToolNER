@@ -22,7 +22,8 @@ pToolNER.filterCoNLLCorpusByCategories(
 pToolNER.generateOutputFile(
                outputFileName='FilteredCorpus.txt',
                sentences=pToolNER.sentencesTokenAndLabels,
-               outputFormat='CoNLL')
+               outputFormat='CoNLL',
+	       shuffleSentences=False)
 ```
 
 ## Como fazer a rotulção (sem uso de Máscara) de todos os arquivos .txt em uma pasta.
