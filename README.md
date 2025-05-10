@@ -1,145 +1,188 @@
+
 # pToolNER
-Ferramenta para trabalhar com Reconhecimento de Entidades Nomeadas em Português.
 
-# Exemplos
+`pToolNER` é uma ferramenta desenvolvida em Python para auxiliar em tarefas de Reconhecimento de Entidades Nomeadas (NER) em textos em língua portuguesa. Ela permite carregar corpus, aplicar modelos de NER (presumivelmente baseados na biblioteca Flair), filtrar entidades, mascarar informações sensíveis e gerar saídas em diferentes formatos.
 
-## Como fazer a filtragem de Entidades Nomeadas permitindo apenas as EN do tipo PESSOA e LOCAL.
-Aqui um corpus em formato CoNLL é carregado e em seguida um fitro deixa apenas as categorias PESSOA e LOCAL e substitui as demais categorias pela máscara 'O'.
+## Instalação
 
-```python
-pToolNER = PortugueseToolNER()
+Antes de usar a ferramenta, certifique-se de ter as seguintes dependências instaladas:
 
-pToolNER.loadCorpusInCoNLLFormat(
-                 inputFilePath='InputCorpus.txt',
-                 setEncoding='utf8',
-                 sepTokenTag=' ')
-
-pToolNER.filterCoNLLCorpusByCategories(
-                    acceptableLabels=['PER', 'LOC'],
-                    maskForUnacceptLabel='O',
-                    sepTokenTag=' ')
-
-pToolNER.generateOutputFile(
-               outputFileName='FilteredCorpus.txt',
-               sentences=pToolNER.sentencesTokenAndLabels,
-               outputFormat='CoNLL',
-	       shuffleSentences=False)
+```bash
+pip install nltk flair unidecode
 ```
 
-## Como fazer a rotulção (sem uso de Máscara) de todos os arquivos .txt em uma pasta.
+Além disso, para a tokenização de sentenças com NLTK, você precisará do recurso `punkt`:
 
 ```python
-pToolNER = PortugueseToolNER()
-
-pToolNER.loadNamedEntityModel('best-model.pt')
-
-pToolNER.sequenceTaggingOnText(
-               rootFolderPath='./PredictablesFiles',
-               fileExtension='.txt',
-               useTokenizer=True,
-               maskNamedEntity=False,
-               createOutputFile=True,
-               outputFilePath='./TaggedTexts',
-               outputFormat='plain',
-               createOutputListSpans=True
-               )
-```
-## Como fazer rotulação de textos usando Máscara para categorias específicas de Entidades Nomeadas (EN).
-Aqui as EN PESSOA e LOCAL serão substituídas por um único simbolo '[HIDDEN-INFO]'.
-
-```python
-pToolNER = PortugueseToolNER()
-
-pToolNER.loadNamedEntityModel('best-model.pt')
-
-pToolNER.sequenceTaggingOnText(
-               rootFolderPath='./PredictablesFiles',
-               fileExtension='.txt',
-               useTokenizer=True,
-               maskNamedEntity=True,
-               specialTokenToMaskNE='[HIDDEN-INFO]',
-               sepTokenTag=' ',
-               entitiesToMask=['B-PER', 'I-PER', 'B-LOC', 'I-LOC'],
-               createOutputFile=True,
-               outputFilePath='./TaggedTexts',
-               outputFormat='plain',
-               createOutputListSpans=True
-               )
+import nltk
+nltk.download('punkt')
 ```
 
-## Como fazer rotulação de textos usando Máscara para EN e Lista auxiliar de EN.
-```python
-pToolNER = PortugueseToolNER()
+## Principais Funcionalidades
 
+- Carregamento de corpus nos formatos CoNLL e texto plano.
+- Aplicação de modelos NER (Flair) para rotulagem de entidades.
+- Filtragem de entidades nomeadas por categorias específicas.
+- Mascaramento de entidades nomeadas com tokens especiais.
+- Uso de listas auxiliares para expandir o escopo do mascaramento.
+- Rotulagem de textos em arquivos ou "on the fly".
+- Geração de arquivos de saída nos formatos CoNLL e texto plano.
+
+## Exemplos de Uso
+
+> **Nota sobre `entitiesToMask`:** Ao especificar entidades para mascaramento, utilize os tipos base da entidade (ex: `PER`, `LOC`). A ferramenta é projetada para lidar com as tags retornadas pelo modelo Flair, que geralmente não incluem os prefixos `B-` ou `I-`.
+
+### 1. Filtragem de Entidades Nomeadas em Corpus CoNLL
+
+```python
+from pToolNER import PortugueseToolNER
+
+tool = PortugueseToolNER()
+
+tool.loadCorpusInCoNLLFormat(
+    inputFilePath='InputCorpus.txt',
+    setEncoding='utf-8',
+    sepTokenTag=' '
+)
+
+_, filtered_sentences_token_and_labels = tool.filterCoNLLCorpusByCategories(
+    acceptableLabels=['PER', 'LOC'],
+    maskForUnacceptLabel='O',
+    sepTokenTag=' '
+)
+
+tool.generateOutputFile(
+    outputFileName='FilteredCorpus.txt',
+    sentences=filtered_sentences_token_and_labels,
+    outputFormat='CoNLL',
+    shuffleSentences=False
+)
+```
+
+### 2. Rotulagem de Arquivos `.txt` em uma Pasta (Sem Máscara)
+
+```python
+tool.loadNamedEntityModel('best-model.pt')
+
+tool.sequenceTaggingOnText(
+    rootFolderPath='./PredictablesFiles',
+    fileExtension='.txt',
+    useTokenizer_flair=True,
+    maskNamedEntity=False,
+    createOutputFile=True,
+    outputFilePath='./TaggedTexts',
+    outputFormat='plain',
+    createOutputListSpans=True
+)
+```
+
+### 3. Rotulagem com Máscara para Categorias Específicas
+
+```python
+tool.loadNamedEntityModel('best-model.pt')
+
+tool.sequenceTaggingOnText(
+    rootFolderPath='./PredictablesFiles',
+    fileExtension='.txt',
+    useTokenizer_flair=True,
+    maskNamedEntity=True,
+    specialTokenToMaskNE='[INFO-SIGILOSA]',
+    sepTokenTag=' ',
+    entitiesToMask=['PER', 'LOC'],
+    createOutputFile=True,
+    outputFilePath='./MaskedTexts',
+    outputFormat='plain',
+    createOutputListSpans=True
+)
+```
+
+### 4. Rotulagem com Máscara e Lista Auxiliar de Nomes
+
+```python
 listStopNames = ['da', 'de', 'do', 'dos']
-listNames = ['name name name', 'name', 'name name']
+listNamesToMask = ['Manoel Francisco', 'Vbrs']
 
-pToolNER.getUniqueNames(listNames, listStopNames)
+tool.getUniqueNames(rawListNames=listNamesToMask, listStopNames=listStopNames)
 
-pToolNER.loadNamedEntityModel('best-model.pt')
+tool.loadNamedEntityModel('best-model.pt')
 
-pToolNER.sequenceTaggingOnText(
-               rootFolderPath='./PredictablesFiles',
-               fileExtension='.txt',
-               useTokenizer=True,
-               maskNamedEntity=True,
-               specialTokenToMaskNE='[HIDDEN-INFO]',
-               sepTokenTag=' ',
-               entitiesToMask=['B-PER', 'I-PER', 'B-LOC', 'I-LOC'],
-               useAuxListNE=True,
-               auxListNE=pToolNER.uniqueStringNames,
-               createOutputFile=True,
-               outputFilePath='./TaggedTexts',
-               outputFormat='plain',
-               createOutputListSpans=True
-               )
+tool.sequenceTaggingOnText(
+    rootFolderPath='./PredictablesFiles',
+    fileExtension='.txt',
+    useTokenizer_flair=True,
+    maskNamedEntity=True,
+    specialTokenToMaskNE='[INFO-SIGILOSA]',
+    sepTokenTag=' ',
+    entitiesToMask=['PER', 'LOC'],
+    useAuxListNE=True,
+    auxListNE=tool.uniqueStringNames,
+    createOutputFile=True,
+    outputFilePath='./MaskedTextsWithAuxList',
+    outputFormat='plain',
+    createOutputListSpans=True
+)
 ```
-## Como fazer rotulação de sequencia de sentenças _(On the fly)_ sem carregar arquivos de texto.
+
+### 5. Rotulagem "On The Fly" (Texto Direto como Entrada)
+
 ```python
-pToolNER = PortugueseToolNER()
+tool.loadNamedEntityModel('best-model.pt')
 
-listStopNames = ['da', 'de', 'do', 'dos']
-listNames = ['name name name', 'name', 'name name']
+texto_exemplo = "Finalmente o Manoel Francisco conseguiu encontrar com Xdfghuy."
 
-pToolNER.getUniqueNames(listNames, listStopNames)
+text_id, masked_tokens, tagged_files_dict, _, _ = tool.sequenceTaggingOnTheFly(
+    textToPredict=texto_exemplo,
+    textId="exemplo_on_the_fly_1",
+    useSentenceTokenize_nltk=True,
+    useTokenizer_flair=True,
+    maskNamedEntity=True,
+    specialTokenToMaskNE='[INFO-SIGILOSA]',
+    sepTokenTag=' ',
+    entitiesToMask=['ORG'],
+    useAuxListNE=True,
+    auxListNE=tool.uniqueStringNames,
+    createOutputFile=True,
+    outputFilePath='./TaggedSingleTexts',
+    outputFormat='plain',
+    createOutputListSpans=True
+)
 
-pToolNER.loadNamedEntityModel('best-model.pt')
-
-pToolNER.sequenceTaggingOnTheFly(
-			   textToPredict = 'Put Your Sentence Here.',
-			   textId = 1,
-			   useTokenizer=True,
-			   useSentenceTokenize=True,
-			   maskNamedEntity=True,
-			   specialTokenToMaskNE='[HIDDEN-INFO]',
-			   sepTokenTag=' ',
-			   entitiesToMask=['B-PER', 'I-PER', 'B-LOC', 'I-LOC'],
-			   useAuxListNE=True,
-			   auxListNE=pToolNER.uniqueStringNames,
-			   createOutputFile=True,
-			   outputFilePath='./TaggedTexts',
-			   outputFormat='plain',
-			   createOutputListSpans=True
-			   )
+print(f"Texto processado (ID: {text_id}):")
+if tagged_files_dict and str(text_id) in tagged_files_dict:
+    for sentence in tagged_files_dict[str(text_id)]:
+        print(sentence)
 ```
-## Anonimização de Entidades Nomeadas
-Como fazer rotulação de sequencia de sentenças _(On the fly)_ sem carregar arquivos de texto e lista auxiliar.
+
+### 6. Anonimização Rápida "On The Fly"
+
 ```python
-pToolNER = PortugueseToolNER()
+tool.loadNamedEntityModel('best-model.pt')
 
-pToolNER.loadNamedEntityModel('best-model.pt')
+texto_para_anonimizar = "Qtgho Vbrs será lançado no próximo mês em São Paulo."
 
-pToolNER.sequenceTaggingOnTheFly(
-          textToPredict = 'Put Your Sentence Here.',
-          textId = 1,
-          useTokenizer=True,
-          useSentenceTokenize=True,
-          maskNamedEntity=True,
-          specialTokenToMaskNE='[HIDDEN-INFO]',
-          sepTokenTag=' ',
-          entitiesToMask=['B-PER', 'I-PER', 'B-LOC', 'I-LOC'],
-          useAuxListNE=False,
-          createOutputFile=False,
-	  createOutputListSpans=False
-          )
+_, masked_output_tokens, tagged_output_dict, _, _ = tool.sequenceTaggingOnTheFly(
+    textToPredict=texto_para_anonimizar,
+    textId="anon_exemplo_2",
+    useSentenceTokenize_nltk=True,
+    useTokenizer_flair=True,
+    maskNamedEntity=True,
+    specialTokenToMaskNE='[DADO_OCULTO]',
+    sepTokenTag=' ',
+    entitiesToMask=['PER', 'LOC', 'ORG'],
+    useAuxListNE=False,
+    createOutputFile=False,
+    createOutputListSpans=False
+)
+
+print(f"Texto anonimizado (ID: anon_exemplo_2):")
+if tagged_output_dict and "anon_exemplo_2" in tagged_output_dict:
+    for sentence in tagged_output_dict["anon_exemplo_2"]:
+        print(sentence)
 ```
+
+> **Exemplo de saída esperada:**  
+> `"Qtgho [DADO_OCULTO] será lançado no próximo mês em [DADO_OCULTO]."`
+
+---
+
+Adapte os caminhos dos arquivos, nomes de modelos e listas de entidades conforme necessário.
